@@ -96,6 +96,67 @@ set_s_timer_reg = |state, reg|
     val = state |> get_register reg
     { state & timers: { timers & sound: Timer.set_timer sound_timer val } }
 
+set_index = |state, nnn|
+    cpu = state.cpu
+    { state & cpu: { cpu & i: nnn } }
+
+set_nn = |state, vx, nn|
+    state |> set_register vx nn
+
+set_regs = |state, vx, vy|
+    valy = state |> get_register vy
+    state |> set_register vx valy
+
+binary_regs = |state, vx, vy, op|
+    valx = state |> get_register vx
+    valy = state |> get_register vy
+    state |> set_register vx (op vx vy)
+
+add_index = |state, vx|
+    valx = state |> get_register vx |> Num.to_u16
+    overflows = 0x1000 - state.cpu.i < valx
+    new_state = state |> set_index valx
+    # TODO: this if should be under a config flag
+    if overflows then new_state |> set_register 0xF 1 else new_state
+
+add_nn = |state, reg, nn|
+    val = state |> get_register reg
+    state |> set_register reg (val + nn)
+
+add_regs = |state, vx, vy|
+    valx = state |> get_register vx
+    valy = state |> get_register vy
+    overflows = Num.from_bool(0xFF - valx < valy)
+    state
+    |> binary_regs vx vy (|x, y| x + y)
+    |> set_register 0xF overflows
+
+sub_regs = |state, vx, vy|
+    valx = state |> get_register vx
+    valy = state |> get_register vy
+    overflows = Num.from_bool(valx >= valy)
+    state
+    |> binary_regs vx vy (|x, y| x - y)
+    |> set_register 0xF overflows
+
+shift_left = |state, vx, vy|
+    valx = state |> get_register vx
+    bit = (Num.bitwise_and(valx, 0x80) > 0) |> Num.from_bool
+    state
+    |> set_register vx Num.shift_left_by(valx, 1)
+    |> set_register 0xF bit
+    # TODO: this should be under a flag
+    |> set_regs vx vy
+
+shift_right = |state, vx, vy|
+    valx = state |> get_register vx
+    bit = (Num.bitwise_and(valx, 0x1) > 0) |> Num.from_bool
+    state
+    |> set_register vx Num.shift_right_by(valx, 1)
+    |> set_register 0xF bit
+    # TODO: this should be under a flag
+    |> set_regs vx vy
+
 exec_instruction : State, U16 -> State
 exec_instruction = |state, bytes|
     n1 = Num.bitwise_and 0xF000 bytes |> Num.shift_right_by 12 |> Num.to_u8
