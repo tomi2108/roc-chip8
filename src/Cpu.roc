@@ -1,4 +1,4 @@
-module [exec_cpu]
+module [Cpu, exec_instruction, initial_cpu]
 
 import Memory
 
@@ -15,8 +15,5 @@ initial_cpu = {
     i: 0,
 }
 
-exec_cpu : Memory.Ram, Cpu -> Cpu
-exec_cpu = |ram, cpu| 
-  byte_1 = Memory.read_ram ram cpu.pc
-  byte_2 = Memory.read_ram ram (cpu.pc+1)
-  cpu
+exec_instruction : { memory : Memory.Mem, cpu : Cpu }, U16 -> { memory : Memory.Mem, cpu : Cpu }
+exec_instruction = |state, bytes| state

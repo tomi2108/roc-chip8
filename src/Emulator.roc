@@ -1,0 +1,22 @@
+module [State, exec_cpu, initial_state]
+
+import Memory
+import Ram
+import Cpu
+
+State : { cpu : Cpu.Cpu, memory : Memory.Mem }
+
+initial_state : State
+initial_state = {
+    cpu: Cpu.initial_cpu,
+    memory: Memory.initial_memory,
+}
+
+exec_cpu : State -> State
+exec_cpu = |state|
+    b1 = Ram.read_ram state.memory.ram (state.cpu.pc) |> Num.to_u16
+    b2 = Ram.read_ram state.memory.ram (state.cpu.pc + 1) |> Num.to_u16
+    bytes = Num.shift_left_by b1 8 |> Num.bitwise_or b2
+    { cpu: new_cpu, memory: new_memory } = Cpu.exec_instruction state bytes
+    { state & cpu: { new_cpu & pc: new_cpu.pc + 2 }, memory: new_memory }
+
