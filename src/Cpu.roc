@@ -37,7 +37,7 @@ jump = |state, nnn|
     { state & cpu: { cpu & pc: nnn } }
 
 jump_offset = |state, reg, nnn|
-    offset = nnn + Num.to_u16(get_register state reg)
+    offset = nnn + Num.to_u16(state |> get_register reg)
     jump state offset
 
 jump_offset_v0 = |state, nnn| jump_offset state 0x0 nnn
@@ -53,46 +53,48 @@ sub_routine = |state, nnn|
     jump new_state nnn
 
 skip_if_reg = |state, reg, nn|
-    val = get_register state reg
-    advance_if state (val == nn)
+    val = state |> get_register reg
+    state |> advance_if (val == nn)
 
 skip_if_not_reg = |state, reg, nn|
-    val = get_register state reg
-    advance_if state (val != nn)
+    val = state |> get_register reg
+    state |> advance_if (val != nn)
 
 skip_if_regs = |state, reg1, reg2|
-    v1 = get_register state reg1
-    v2 = get_register state reg2
-    advance_if state (v1 == v2)
+    v1 = state |> get_register reg1
+    v2 = state |> get_register reg2
+    state |> advance_if (v1 == v2)
 
 skip_if_not_regs = |state, reg1, reg2|
-    v1 = get_register state reg1
-    v2 = get_register state reg2
-    advance_if state (v1 != v2)
+    v1 = state |> get_register reg1
+    v2 = state |> get_register reg2
+    state |> advance_if (v1 != v2)
 
 skip_if_key = |state, reg|
-    key = get_register state reg
+    key = state |> get_register reg
     pressed = Keypad.is_key_pressed state.keypad key
-    advance_if state pressed
+    state |> advance_if pressed
 
 skip_if_not_key = |state, reg|
-    key = get_register state reg
+    key = state |> get_register reg
     pressed = Keypad.is_key_pressed state.keypad key
-    advance_if state (Bool.not pressed)
+    state |> advance_if (Bool.not pressed)
 
 set_reg_d_timer = |state, reg|
     val = Timer.get_timer state.timers.delay
-    set_register state reg val
+    state |> set_register reg val
 
 set_d_timer_reg = |state, reg|
     timers = state.timers
     delay_timer = timers.delay
-    { state & timers: { timers & delay: Timer.set_timer state.timers.delay (get_register state reg) } }
+    val = state |> get_register reg
+    { state & timers: { timers & delay: Timer.set_timer delay_timer val } }
 
 set_s_timer_reg = |state, reg|
     timers = state.timers
     sound_timer = timers.sound
-    { state & timers: { timers & sound: Timer.set_timer state.timers.sound (get_register state reg) } }
+    val = state |> get_register reg
+    { state & timers: { timers & sound: Timer.set_timer sound_timer val } }
 
 exec_instruction : State, U16 -> State
 exec_instruction = |state, bytes|
@@ -100,8 +102,10 @@ exec_instruction = |state, bytes|
     n2 = Num.bitwise_and 0x0F00 bytes |> Num.shift_right_by 8 |> Num.to_u8
     n3 = Num.bitwise_and 0x00F0 bytes |> Num.shift_right_by 4 |> Num.to_u8
     n4 = Num.bitwise_and 0x000F bytes |> Num.shift_right_by 0 |> Num.to_u8
+
     nn = Num.bitwise_and 0x00FF bytes |> Num.to_u8
     nnn = Num.bitwise_and 0x0FFF bytes
-    when n1 is
-        0x1 -> jump state nnn
+
+    when (n1, n2, n3, n4) is
+        (0x1, _, _, _) -> jump state nnn
         _ -> noop state
