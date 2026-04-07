@@ -1,4 +1,4 @@
-module [Cpu, exec_instruction, initial_cpu]
+module [Cpu, exec_instruction, initial_cpu, advance_pc]
 
 import Memory
 import Ram
@@ -251,7 +251,8 @@ draw = |state, regx, regy, n|
     { new_state & screen: new_screen }
 
 screen_clear = |state|
-    state
+    new_screen = Screen.screen_clear state.screen
+    { state & screen: new_screen }
 
 exec_instruction : State, U16 -> State
 exec_instruction = |state, bytes|
