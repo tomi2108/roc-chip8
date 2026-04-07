@@ -7,6 +7,7 @@ import Stack
 import Keypad
 import Timer
 import rand.Random
+import pf.Utc
 
 Cpu : { rs : List U8, pc : U16, i : U16 }
 State : {
@@ -44,7 +45,7 @@ noop = |state| state
 random = |state, reg, nn|
     generator = Random.bounded_u8(0x0, 0xFF)
     { value: rand } =
-        Random.seed(123)
+        Random.seed(Num.to_u32 Utc.to_millis_since_epoch(Utc.now!({})))
         |> Random.step(generator)
     state |> set_register reg (Num.bitwise_and rand nn)
 
