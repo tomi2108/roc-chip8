@@ -54,8 +54,10 @@ jump_offset = |state, reg, nnn|
 jump_offset_v0 = |state, nnn| jump_offset state 0x0 nnn
 
 ret = |state|
-    bytes = Stack.stack_pop state.memory.stack
-    jump state bytes
+    (bytes, new_stack) = Stack.stack_pop state.memory.stack
+    mem = state.memory
+    new_state = { state & memory: { mem & stack: new_stack } }
+    new_state |> jump bytes
 
 sub_routine = |state, nnn|
     memory = state.memory
