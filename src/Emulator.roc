@@ -1,15 +1,27 @@
 module [State, exec_cpu, initial_state]
 
 import Memory
+import Keypad
 import Ram
+import Screen
 import Cpu
+import Timer
 
-State : { cpu : Cpu.Cpu, memory : Memory.Mem }
+State : {
+    cpu : Cpu.Cpu,
+    memory : Memory.Mem,
+    screen : Screen.Screen,
+    keypad : Keypad.Keypad,
+    timers : Timer.Timers,
+}
 
 initial_state : State
 initial_state = {
     cpu: Cpu.initial_cpu,
     memory: Memory.initial_memory,
+    screen: Screen.initial_screen,
+    keypad: Keypad.initial_keypad,
+    timers: Timer.initial_timers,
 }
 
 exec_cpu : State -> State

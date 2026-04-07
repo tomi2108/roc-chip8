@@ -24,7 +24,7 @@ font = [
 
 empty_ram : Ram
 empty_ram =
-    List.repeat 0xFFF 0
+    List.repeat 0 0xFFF
     |> List.map Num.to_u8
 
 initial_ram : Ram

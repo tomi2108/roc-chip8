@@ -1,9 +1,11 @@
-module [Screen, screen_get, screen_set, screen_height, screen_width]
+module [Screen, screen_get, screen_set, screen_height, screen_width, initial_screen]
 
 Screen : List (List Bool)
 
 screen_width = 64
 screen_height = 32
+
+initial_screen = List.repeat (List.repeat Bool.false screen_height) screen_width
 
 screen_set : Screen, U8, U8, Bool -> Screen
 screen_set = |screen, x, y, to|

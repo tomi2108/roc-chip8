@@ -119,7 +119,7 @@ set_regs = |state, vx, vy|
 binary_regs = |state, vx, vy, op|
     valx = state |> get_register vx
     valy = state |> get_register vy
-    state |> set_register vx (op vx vy)
+    state |> set_register vx (op valx valy)
 
 add_index = |state, vx|
     valx = state |> get_register vx |> Num.to_u16
