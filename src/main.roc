@@ -4,6 +4,7 @@ app [main!] {
 }
 
 import Emulator
+import Cartdrige
 import Timer
 import Screen
 
@@ -19,5 +20,14 @@ render! = |state|
     render! { new_state & timers: new_timers }
 
 main! = |_args|
+    filename = "TETRIS"
+
     initial_state = Emulator.initial_state
-    render! initial_state
+    mem = initial_state.memory
+
+    loaded_ram =
+        mem.ram
+        |> Cartdrige.load_cartridge! filename
+
+    render! { initial_state & memory: { mem & ram: loaded_ram } }
+

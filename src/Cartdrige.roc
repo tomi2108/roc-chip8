@@ -1,13 +1,13 @@
-module [loadCartridge!]
+module [load_cartridge!]
 
-import Ram 
+import Ram
 import pf.File
 
-loadCartridge! : Str, Ram.Ram => Ram.Ram
-loadCartridge! = |filename, ram| Ram.write_ram ram (readFile! filename) 0x200
+load_cartridge! : Ram.Ram, Str => Ram.Ram
+load_cartridge! = |ram, filename| Ram.write_ram ram (read_file! filename) 0x200
 
-readFile! : Str => List U8
-readFile! = |filename|
+read_file! : Str => List U8
+read_file! = |filename|
     File.read_bytes! filename
     |> Result.with_default []
 

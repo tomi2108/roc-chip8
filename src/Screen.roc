@@ -1,4 +1,6 @@
-module [Screen, screen_clear, screen_get, screen_set, screen_height, screen_width, initial_screen,screen_draw!]
+module [Screen, screen_clear, screen_get, screen_set, screen_height, screen_width, initial_screen, screen_draw!]
+
+import pf.Stdout
 
 Screen : List (List Bool)
 
@@ -34,4 +36,8 @@ screen_get = |screen, x, y|
 
 screen_draw! : Screen => {}
 screen_draw! = |screen|
-    {}
+    List.walk! screen {} |acc, row|
+        slice = row |> List.map (|col| if col then "█" else "░") |> List.walk "" (|a, b| Str.concat a b)
+        when Stdout.line!(slice) is
+            Ok(_) -> acc
+            Err(_) -> crash "Cannot write to stdout"
