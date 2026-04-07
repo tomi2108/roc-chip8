@@ -20,5 +20,5 @@ set_timer = |timers, timer, to|
 tick_timer : Timers, Timer -> Timers
 tick_timer = |timers, timer|
     when timer is
-        Sound -> { timers & sound: if Num.is_zero timers.sound then 0 else timers.sound - 1 }
-        Delay -> { timers & delay: if Num.is_zero timers.delay then 0 else timers.delay - 1 }
+        Sound -> { timers & sound: Num.sub_wrap(timers.sound, 1) }
+        Delay -> { timers & delay: Num.sub_wrap(timers.delay, 1) }

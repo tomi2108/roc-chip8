@@ -19,7 +19,7 @@ State : {
 
 initial_cpu : Cpu
 initial_cpu = {
-    rs: (List.repeat 16 0 |> List.map Num.to_u8),
+    rs: (List.repeat 0 16 |> List.map Num.to_u8),
     pc: 0x200,
     i: 0,
 }
@@ -137,7 +137,7 @@ add_index = |state, vx|
 
 add_nn = |state, reg, nn|
     val = state |> get_register reg
-    state |> set_register reg (val + nn)
+    state |> set_register reg Num.add_wrap(val, nn)
 
 add_regs = |state, vx, vy|
     valx = state |> get_register vx
@@ -203,26 +203,23 @@ binary_decimal_conversion = |state, reg|
     new_ram = mem.ram |> Ram.write_ram [digit_1, digit_2, digit_3] state.cpu.i
     { state & memory: { mem & ram: new_ram } }
 
-# TODO:
-# if (config_get_int_value(cpu_config, "memory_access_modify_index"))
-# registers.R_I += reg + 1;
 memory_write = |state, reg|
     mem = state.memory
     to_write =
         List.range({ start: At 0, end: At reg })
         |> List.map |x|
             state |> get_register x
-
+    # TODO: this new_state should be under a flag
+    new_state = state |> set_index Num.to_u16(reg + 1)
     new_ram = state.memory.ram |> Ram.write_ram to_write state.cpu.i
-    { state & memory: { mem & ram: new_ram } }
+    { new_state & memory: { mem & ram: new_ram } }
 
-# TODO:
-# if (config_get_int_value(cpu_config, "memory_access_modify_index"))
-# registers.R_I += reg + 1;
 memory_read = |state, reg|
+    # TODO: this new_state should be under a flag
+    new_state = state |> set_index Num.to_u16(reg + 1)
     List.range({ start: At 0u8, end: At reg })
     |> List.walk
-        state
+        new_state
         |acc, x|
             byte = acc.memory.ram |> Ram.read_ram (Num.to_u16(x) + acc.cpu.i)
             acc |> set_register Num.to_u8(x) byte
@@ -263,10 +260,10 @@ screen_clear = |state|
 
 exec_instruction : State, U16 -> State
 exec_instruction = |state, bytes|
-    n1 = Num.bitwise_and 0xF000 bytes |> Num.shift_right_by 12 |> Num.to_u8
-    n2 = Num.bitwise_and 0x0F00 bytes |> Num.shift_right_by 8 |> Num.to_u8
-    n3 = Num.bitwise_and 0x00F0 bytes |> Num.shift_right_by 4 |> Num.to_u8
-    n4 = Num.bitwise_and 0x000F bytes |> Num.shift_right_by 0 |> Num.to_u8
+    n1 = bytes |> Num.shift_right_by 12 |> Num.to_u8 |> Num.bitwise_and 0x0Fu8
+    n2 = bytes |> Num.shift_right_by 8 |> Num.to_u8 |> Num.bitwise_and 0x0Fu8
+    n3 = bytes |> Num.shift_right_by 4 |> Num.to_u8 |> Num.bitwise_and 0x0Fu8
+    n4 = bytes |> Num.to_u8 |> Num.bitwise_and 0x0Fu8
 
     nn = Num.bitwise_and 0x00FF bytes |> Num.to_u8
     nnn = Num.bitwise_and 0x0FFF bytes
@@ -293,7 +290,7 @@ exec_instruction = |state, bytes|
         (0x9, _, _, _) -> skip_if_not_regs state n2 n3
         (0xA, _, _, _) -> set_index state nnn
         # TODO: config for using jump_offset_v0 instead
-        (0xB, _, _, _) -> jump_offset state n2 nnn
+        (0xB, _, _, _) -> jump_offset_v0 state nnn
         (0xC, _, _, _) -> random state n2 nn
         (0xD, _, _, _) -> draw state n2 n3 n4
         (0xE, _, 0x9, 0xE) -> skip_if_key state n2

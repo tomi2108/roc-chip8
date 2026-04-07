@@ -10,7 +10,7 @@ import Timer
 import Screen
 import pf.Sleep
 
-fps = 10
+fps = 120
 
 clear_sequence = [27, 91, 50, 74, 27, 91, 72]
 clear_screen! = |_|

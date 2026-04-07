@@ -29,6 +29,8 @@ exec_cpu = |state|
     b1 = Ram.read_ram state.memory.ram (state.cpu.pc) |> Num.to_u16
     b2 = Ram.read_ram state.memory.ram (state.cpu.pc + 1) |> Num.to_u16
     bytes = Num.shift_left_by b1 8 |> Num.bitwise_or b2
-    Cpu.exec_instruction state bytes
+
+    state
     |> Cpu.advance_pc
+    |> Cpu.exec_instruction bytes
 
