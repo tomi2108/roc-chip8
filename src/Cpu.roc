@@ -6,6 +6,7 @@ import Screen
 import Stack
 import Keypad
 import Timer
+import rand.Random
 
 Cpu : { rs : List U8, pc : U16, i : U16 }
 State : {
@@ -40,8 +41,12 @@ advance_if = |state, condition| if condition then advance_pc state else state
 noop : State -> State
 noop = |state| state
 
-# TODO: implement
-random = |state, reg, nn| state
+random = |state, reg, nn|
+    generator = Random.bounded_u8(0x0, 0xFF)
+    { value: rand } =
+        Random.seed(123)
+        |> Random.step(generator)
+    state |> set_register reg (Num.bitwise_and rand nn)
 
 jump = |state, nnn|
     cpu = state.cpu

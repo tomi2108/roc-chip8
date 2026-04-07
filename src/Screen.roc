@@ -1,4 +1,4 @@
-module [Screen, screen_clear, screen_get, screen_set, screen_height, screen_width, initial_screen]
+module [Screen, screen_clear, screen_get, screen_set, screen_height, screen_width, initial_screen,screen_draw!]
 
 Screen : List (List Bool)
 
@@ -31,3 +31,7 @@ screen_get = |screen, x, y|
     is
         Ok(value) -> value
         Err(OutOfBounds) -> crash "Illegal screen get"
+
+screen_draw! : Screen => {}
+screen_draw! = |screen|
+    {}
