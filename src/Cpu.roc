@@ -131,7 +131,7 @@ binary_regs = |state, vx, vy, op|
 add_index = |state, vx|
     valx = state |> get_register vx |> Num.to_u16
     overflows = 0x1000 - state.cpu.i < valx
-    new_state = state |> set_index valx
+    new_state = state |> set_index Num.add_wrap(state.cpu.i, valx)
     # TODO: this if should be under a config flag
     if overflows then new_state |> set_register 0xF 1 else new_state
 
@@ -144,7 +144,7 @@ add_regs = |state, vx, vy|
     valy = state |> get_register vy
     overflows = Num.from_bool(0xFF - valx < valy)
     state
-    |> binary_regs vx vy (|x, y| x + y)
+    |> binary_regs vx vy (|x, y| Num.add_wrap(x, y))
     |> set_register 0xF overflows
 
 sub_regs = |state, vx, vy|
@@ -167,19 +167,19 @@ shift_left = |state, vx, vy|
     valx = state |> get_register vx
     bit = (Num.bitwise_and(valx, 0x80) > 0) |> Num.from_bool
     state
-    |> set_register vx Num.shift_left_by(valx, 1)
-    |> set_register 0xF bit
     # TODO: this should be under a flag
     |> set_regs vx vy
+    |> set_register vx Num.shift_left_by(valx, 1)
+    |> set_register 0xF bit
 
 shift_right = |state, vx, vy|
     valx = state |> get_register vx
     bit = (Num.bitwise_and(valx, 0x1) > 0) |> Num.from_bool
     state
-    |> set_register vx Num.shift_right_by(valx, 1)
-    |> set_register 0xF bit
     # TODO: this should be under a flag
     |> set_regs vx vy
+    |> set_register vx Num.shift_right_by(valx, 1)
+    |> set_register 0xF bit
 
 get_key = |state, reg|
     when Keypad.some_key_pressed state.keypad is
@@ -192,7 +192,7 @@ get_key = |state, reg|
 font_character = |state, reg|
     val = state |> get_register reg
     character = val |> Num.bitwise_and 0x000F |> Num.to_u16
-    state |> set_index (0x50 + character * 5)
+    state |> set_index (0x50u16 + character * 5u16)
 
 binary_decimal_conversion = |state, reg|
     byte = state |> get_register reg
@@ -210,13 +210,13 @@ memory_write = |state, reg|
         |> List.map |x|
             state |> get_register x
     # TODO: this new_state should be under a flag
-    new_state = state |> set_index Num.to_u16(reg + 1)
-    new_ram = state.memory.ram |> Ram.write_ram to_write state.cpu.i
+    new_state = state |> set_index (state.cpu.i + Num.to_u16(reg + 1))
+    new_ram = new_state.memory.ram |> Ram.write_ram to_write new_state.cpu.i
     { new_state & memory: { mem & ram: new_ram } }
 
 memory_read = |state, reg|
     # TODO: this new_state should be under a flag
-    new_state = state |> set_index Num.to_u16(reg + 1)
+    new_state = state |> set_index (state.cpu.i + Num.to_u16(reg + 1))
     List.range({ start: At 0u8, end: At reg })
     |> List.walk
         new_state
