@@ -43,7 +43,7 @@ write_ram = |ram, stream, offset|
 read_ram : Ram, U16 -> U8
 read_ram = |ram, pos|
     when List.get ram (Num.to_u64 pos) is
-        Err(_) -> crash "Ilegal read to ram"
+        Err(_) -> crash "Illegal read to ram"
         Ok(read) -> read
 
 write_font : Ram -> Ram

@@ -34,6 +34,7 @@ screen_get = |screen, x, y|
         Ok(value) -> value
         Err(OutOfBounds) -> crash "Illegal screen get"
 
+
 screen_draw! : Screen => {}
 screen_draw! = |screen|
     List.walk! screen {} |acc, row|
