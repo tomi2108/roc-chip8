@@ -32,12 +32,12 @@ initial_ram =
     empty_ram
     |> write_font
 
-write_ram : Ram, List U8, U64 -> Ram
+write_ram : Ram, List U8, U16 -> Ram
 write_ram = |ram, stream, offset|
     stream
     |> List.walk_with_index(
         ram,
-        |acc, elem, i| List.set acc (offset + i) elem,
+        |acc, elem, i| List.set acc (Num.to_u64(offset) + i) elem,
     )
 
 read_ram : Ram, U16 -> U8
