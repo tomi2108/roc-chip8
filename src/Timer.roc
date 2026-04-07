@@ -1,15 +1,24 @@
 module [Timers, get_timer, set_timer, tick_timer, initial_timers]
 
-Timer : U8
-Timers : { sound : Timer, delay : Timer }
+Timer : [Sound, Delay]
+Timers : { sound : U8, delay : U8 }
 
 initial_timers = { sound: 0u8, delay: 0u8 }
 
-get_timer : Timer -> U8
-get_timer = |timer| timer
+get_timer : Timers, Timer -> U8
+get_timer = |timers, timer|
+    when timer is
+        Sound -> timers.sound
+        Delay -> timers.delay
 
-set_timer : Timer, U8 -> Timer
-set_timer = |timer, to| timer
+set_timer : Timers, Timer, U8 -> Timers
+set_timer = |timers, timer, to|
+    when timer is
+        Sound -> { timers & sound: to }
+        Delay -> { timers & delay: to }
 
-tick_timer : Timer -> Timer
-tick_timer = |timer| timer
+tick_timer : Timers, Timer -> Timers
+tick_timer = |timers, timer|
+    when timer is
+        Sound -> { timers & sound: timers.sound - 1 }
+        Delay -> { timers & delay: timers.delay - 1 }

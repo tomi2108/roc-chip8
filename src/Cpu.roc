@@ -94,18 +94,18 @@ skip_if_not_key = |state, reg|
     state |> advance_if (Bool.not pressed)
 
 set_reg_d_timer = |state, reg|
-    val = Timer.get_timer state.timers.delay
+    val = Timer.get_timer state.timers Delay
     state |> set_register reg val
 
 set_d_timer_reg = |state, reg|
-    timers = state.timers
     val = state |> get_register reg
-    { state & timers: { timers & delay: Timer.set_timer timers.delay val } }
+    new_timers = state.timers |> Timer.set_timer Delay val
+    { state & timers: new_timers }
 
 set_s_timer_reg = |state, reg|
-    timers = state.timers
     val = state |> get_register reg
-    { state & timers: { timers & sound: Timer.set_timer timers.sound val } }
+    new_timers = state.timers |> Timer.set_timer Sound val
+    { state & timers: new_timers }
 
 set_index = |state, nnn|
     cpu = state.cpu
