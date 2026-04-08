@@ -33,12 +33,10 @@ render! = |state|
 main! = |_args|
     filename = "TETRIS"
 
-    initial_state = Emulator.initial_state
-    mem = initial_state.memory
-
-    loaded_ram =
-        mem.ram
+    emu = Emulator.initial_emulator
+    loaded =
+        emu.ram
         |> Cartdrige.load_cartridge! filename
 
-    render! { initial_state & memory: { mem & ram: loaded_ram } }
+    render! { emu & ram: loaded }
 

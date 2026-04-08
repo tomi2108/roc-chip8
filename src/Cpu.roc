@@ -1,22 +1,14 @@
-module [Cpu, exec_instruction, initial_cpu, advance_pc]
+module [Cpu, initial_cpu, advance_pc, exec_instruction]
 
-import Memory
-import Ram
-import Screen
-import Stack
-import Keypad
-import Timer
+import Ram exposing [Ram, read_ram, write_ram]
+import Screen exposing [Screen, screen_width, screen_height, screen_get, screen_set, screen_clear]
+import Stack exposing [Stack, stack_pop, stack_push]
+import Keypad exposing [Keypad]
+import Timer exposing [Timers]
 import rand.Random
 import pf.Utc
 
 Cpu : { rs : List U8, pc : U16, i : U16 }
-State : {
-    memory : Memory.Mem,
-    cpu : Cpu,
-    keypad : Keypad.Keypad,
-    timers : Timer.Timers,
-    screen : Screen.Screen,
-}
 
 initial_cpu : Cpu
 initial_cpu = {
@@ -25,218 +17,237 @@ initial_cpu = {
     i: 0,
 }
 
-set_register : State, U8, U8 -> State
-set_register = |state, reg, val|
-    cpu = state.cpu
-    { state & cpu: { cpu & rs: List.set cpu.rs Num.to_u64(reg) val } }
+set_register : Cpu, U8, U8 -> Cpu
+set_register = |cpu, reg, val|
+    { cpu & rs: List.set cpu.rs Num.to_u64(reg) val }
 
-get_register : State, U8 -> U8
-get_register = |state, reg|
-    when List.get state.cpu.rs Num.to_u64(reg) is
-        Err(_) -> crash "Illegal read to registers"
-        Ok(read) -> read
+get_register : Cpu, U8 -> U8
+get_register = |cpu, reg|
+    when List.get cpu.rs Num.to_u64(reg) is
+        Err _ -> crash "Illegal read to registers"
+        Ok read -> Num.to_u8(read)
 
-advance_pc = |state| jump state (state.cpu.pc + 2)
-advance_if = |state, condition| if condition then advance_pc state else state
+advance_pc : Cpu -> Cpu
+advance_pc = |cpu| jump cpu (cpu.pc + 2)
 
-noop : State -> State
-noop = |state| state
+advance_if : Cpu, Bool -> Cpu
+advance_if = |cpu, condition| if condition then advance_pc cpu else cpu
 
-random = |state, reg, nn|
+random : Cpu, U8, U8 -> Cpu
+random = |cpu, reg, nn|
     generator = Random.bounded_u8(0x0, 0xFF)
     { value: rand } =
         Random.seed(Num.to_u32 Utc.to_millis_since_epoch(Utc.now!({})))
         |> Random.step(generator)
-    state |> set_register reg (Num.bitwise_and rand nn)
+    cpu |> set_register reg (Num.bitwise_and rand nn)
 
-jump = |state, nnn|
-    cpu = state.cpu
-    { state & cpu: { cpu & pc: nnn } }
+jump : Cpu, U16 -> Cpu
+jump = |cpu, nnn|
+    { cpu & pc: nnn }
 
-jump_offset = |state, reg, nnn|
-    offset = nnn + Num.to_u16(state |> get_register reg)
-    state |> jump offset
+jump_offset : Cpu, U8, U16 -> Cpu
+jump_offset = |cpu, reg, nnn|
+    offset = nnn + Num.to_u16(cpu |> get_register reg)
+    cpu |> jump offset
 
-jump_offset_v0 = |state, nnn| jump_offset state 0x0 nnn
+jump_offset_v0 : Cpu, U16 -> Cpu
+jump_offset_v0 = |cpu, nnn| jump_offset cpu 0x0 nnn
 
-ret = |state|
-    (bytes, new_stack) = Stack.stack_pop state.memory.stack
-    mem = state.memory
-    new_state = { state & memory: { mem & stack: new_stack } }
-    new_state |> jump bytes
+ret : (Cpu, Stack) -> (Cpu, Stack)
+ret = |(cpu, stack)|
+    (bytes, new_stack) = stack |> stack_pop
+    new_cpu = cpu |> jump bytes
+    (new_cpu, new_stack)
 
-sub_routine = |state, nnn|
-    memory = state.memory
-    new_stack = Stack.stack_push state.memory.stack state.cpu.pc
-    new_state = { state & memory: { memory & stack: new_stack } }
-    new_state |> jump nnn
+sub_routine : (Cpu, Stack), U16 -> (Cpu, Stack)
+sub_routine = |(cpu, stack), nnn|
+    new_stack = stack |> stack_push cpu.pc
+    new_cpu = cpu |> jump nnn
+    (new_cpu, new_stack)
 
-skip_if_reg = |state, reg, nn|
-    val = state |> get_register reg
-    state |> advance_if (val == nn)
+skip_if_reg : Cpu, U8, U8 -> Cpu
+skip_if_reg = |cpu, reg, nn|
+    val = cpu |> get_register reg
+    cpu |> advance_if (val == nn)
 
-skip_if_not_reg = |state, reg, nn|
-    val = state |> get_register reg
-    state |> advance_if (val != nn)
+skip_if_not_reg : Cpu, U8, U8 -> Cpu
+skip_if_not_reg = |cpu, reg, nn|
+    val = cpu |> get_register reg
+    cpu |> advance_if (val != nn)
 
-skip_if_regs = |state, reg1, reg2|
-    v1 = state |> get_register reg1
-    v2 = state |> get_register reg2
-    state |> advance_if (v1 == v2)
+skip_if_regs : Cpu, U8, U8 -> Cpu
+skip_if_regs = |cpu, reg1, reg2|
+    v1 = cpu |> get_register reg1
+    v2 = cpu |> get_register reg2
+    cpu |> advance_if (v1 == v2)
 
-skip_if_not_regs = |state, reg1, reg2|
-    v1 = state |> get_register reg1
-    v2 = state |> get_register reg2
-    state |> advance_if (v1 != v2)
+skip_if_not_regs : Cpu, U8, U8 -> Cpu
+skip_if_not_regs = |cpu, reg1, reg2|
+    v1 = cpu |> get_register reg1
+    v2 = cpu |> get_register reg2
+    cpu |> advance_if (v1 != v2)
 
-skip_if_key = |state, reg|
-    key = state |> get_register reg
-    pressed = Keypad.is_key_pressed state.keypad key
-    state |> advance_if pressed
+skip_if_key : (Cpu, Keypad), U8 -> Cpu
+skip_if_key = |(cpu, keypad), reg|
+    key = cpu |> get_register reg
+    pressed = keypad |> Keypad.is_key_pressed key
+    cpu |> advance_if pressed
 
-skip_if_not_key = |state, reg|
-    key = state |> get_register reg
-    pressed = Keypad.is_key_pressed state.keypad key
-    state |> advance_if (Bool.not pressed)
+skip_if_not_key : (Cpu, Keypad), U8 -> Cpu
+skip_if_not_key = |(cpu, keypad), reg|
+    key = cpu |> get_register reg
+    pressed = keypad |> Keypad.is_key_pressed key
+    cpu |> advance_if (!pressed)
 
-set_reg_d_timer = |state, reg|
-    val = Timer.get_timer state.timers Delay
-    state |> set_register reg val
+set_reg_d_timer : (Cpu, Timers), U8 -> Cpu
+set_reg_d_timer = |(cpu, timers), reg|
+    val = timers |> Timer.get_timer Delay
+    cpu |> set_register reg val
 
-set_d_timer_reg = |state, reg|
-    val = state |> get_register reg
-    new_timers = state.timers |> Timer.set_timer Delay val
-    { state & timers: new_timers }
+set_d_timer_reg : (Cpu, Timers), U8 -> Timers
+set_d_timer_reg = |(cpu, timers), reg|
+    val = cpu |> get_register reg
+    timers |> Timer.set_timer Delay val
 
-set_s_timer_reg = |state, reg|
-    val = state |> get_register reg
-    new_timers = state.timers |> Timer.set_timer Sound val
-    { state & timers: new_timers }
+set_s_timer_reg : (Cpu, Timers), U8 -> Timers
+set_s_timer_reg = |(cpu, timers), reg|
+    val = cpu |> get_register reg
+    timers |> Timer.set_timer Sound val
 
-set_index = |state, nnn|
-    cpu = state.cpu
-    { state & cpu: { cpu & i: nnn } }
+set_index : Cpu, U16 -> Cpu
+set_index = |cpu, nnn|
+    { cpu & i: nnn }
 
-set_nn = |state, vx, nn|
-    state |> set_register vx nn
+set_nn : Cpu, U8, U8 -> Cpu
+set_nn = |cpu, vx, nn|
+    cpu |> set_register vx nn
 
-set_regs = |state, vx, vy|
-    valy = state |> get_register vy
-    state |> set_register vx valy
+set_regs : Cpu, U8, U8 -> Cpu
+set_regs = |cpu, vx, vy|
+    valy = cpu |> get_register vy
+    cpu |> set_register vx valy
 
-binary_regs = |state, vx, vy, op|
-    valx = state |> get_register vx
-    valy = state |> get_register vy
-    state |> set_register vx (op valx valy)
+binary_regs : Cpu, U8, U8, (U8, U8 -> U8) -> Cpu
+binary_regs = |cpu, vx, vy, op|
+    valx = cpu |> get_register vx
+    valy = cpu |> get_register vy
+    cpu |> set_register vx (op valx valy)
 
-add_index = |state, vx|
-    valx = state |> get_register vx |> Num.to_u16
-    overflows = 0x1000 - state.cpu.i < valx
-    new_state = state |> set_index Num.add_wrap(state.cpu.i, valx)
+add_index : Cpu, U8 -> Cpu
+add_index = |cpu, vx|
+    valx = cpu |> get_register vx |> Num.to_u16
+    overflows = 0x1000 - cpu.i < valx
+    new_cpu = cpu |> set_index Num.add_wrap(cpu.i, valx)
     # TODO: this if should be under a config flag
-    if overflows then new_state |> set_register 0xF 1 else new_state
+    if overflows then new_cpu |> set_register 0xF 1 else new_cpu
 
-add_nn = |state, reg, nn|
-    val = state |> get_register reg
-    state |> set_register reg Num.add_wrap(val, nn)
+add_nn : Cpu, U8, U8 -> Cpu
+add_nn = |cpu, reg, nn|
+    val = cpu |> get_register reg
+    cpu |> set_register reg Num.add_wrap(val, nn)
 
-add_regs = |state, vx, vy|
-    valx = state |> get_register vx
-    valy = state |> get_register vy
+add_regs : Cpu, U8, U8 -> Cpu
+add_regs = |cpu, vx, vy|
+    valx = cpu |> get_register vx
+    valy = cpu |> get_register vy
     overflows = Num.from_bool(0xFF - valx < valy)
-    state
+    cpu
     |> binary_regs vx vy (|x, y| Num.add_wrap(x, y))
     |> set_register 0xF overflows
 
-sub_regs = |state, vx, vy|
-    valx = state |> get_register vx
-    valy = state |> get_register vy
+sub_regs : Cpu, U8, U8 -> Cpu
+sub_regs = |cpu, vx, vy|
+    valx = cpu |> get_register vx
+    valy = cpu |> get_register vy
     overflows = Num.from_bool(valx >= valy)
-    state
+    cpu
     |> binary_regs vx vy (|x, y| x - y)
     |> set_register 0xF overflows
 
-sub_regs_i = |state, vx, vy|
-    valx = state |> get_register vx
-    valy = state |> get_register vy
+sub_regs_i : Cpu, U8, U8 -> Cpu
+sub_regs_i = |cpu, vx, vy|
+    valx = cpu |> get_register vx
+    valy = cpu |> get_register vy
     overflows = Num.from_bool(valy >= valx)
-    state
+    cpu
     |> binary_regs vx vy (|x, y| y - x)
     |> set_register 0xF overflows
 
-shift_left = |state, vx, vy|
-    valx = state |> get_register vx
+shift_left : Cpu, U8, U8 -> Cpu
+shift_left = |cpu, vx, vy|
+    valx = cpu |> get_register vx
     bit = (Num.bitwise_and(valx, 0x80) > 0) |> Num.from_bool
-    state
+    cpu
     # TODO: this should be under a flag
     |> set_regs vx vy
     |> set_register vx Num.shift_left_by(valx, 1)
     |> set_register 0xF bit
 
-shift_right = |state, vx, vy|
-    valx = state |> get_register vx
+shift_right : Cpu, U8, U8 -> Cpu
+shift_right = |cpu, vx, vy|
+    valx = cpu |> get_register vx
     bit = (Num.bitwise_and(valx, 0x1) > 0) |> Num.from_bool
-    state
+    cpu
     # TODO: this should be under a flag
     |> set_regs vx vy
     |> set_register vx Num.shift_right_by(valx, 1)
     |> set_register 0xF bit
 
-get_key = |state, reg|
-    when Keypad.some_key_pressed state.keypad is
-        Ok(key) ->
-            state |> set_register reg key
+get_key : (Cpu, Keypad), U8 -> Cpu
+get_key = |(cpu, keypad), reg|
+    when keypad |> Keypad.some_key_pressed is
+        Ok key -> cpu |> set_register reg key
+        Err NoKeyPressed -> cpu |> jump (cpu.pc - 2)
 
-        Err(NoKeyPressed) ->
-            state |> jump (state.cpu.pc - 2)
-
-font_character = |state, reg|
-    val = state |> get_register reg
+font_character : Cpu, U8 -> Cpu
+font_character = |cpu, reg|
+    val = cpu |> get_register reg
     character = val |> Num.bitwise_and 0x000F |> Num.to_u16
-    state |> set_index (0x50u16 + character * 5u16)
+    cpu |> set_index (0x50u16 + character * 5u16)
 
-binary_decimal_conversion = |state, reg|
-    byte = state |> get_register reg
+binary_decimal_conversion : (Cpu, Ram), U8 -> Ram
+binary_decimal_conversion = |(cpu, ram), reg|
+    byte = cpu |> get_register reg
     digit_1 = (byte // 100) % 10
     digit_2 = (byte // 10) % 10
     digit_3 = byte % 10
-    mem = state.memory
-    new_ram = mem.ram |> Ram.write_ram [digit_1, digit_2, digit_3] state.cpu.i
-    { state & memory: { mem & ram: new_ram } }
+    ram |> write_ram [digit_1, digit_2, digit_3] cpu.i
 
-memory_write = |state, reg|
-    mem = state.memory
+memory_write : (Cpu, Ram), U8 -> (Cpu, Ram)
+memory_write = |(cpu, ram), reg|
     to_write =
         List.range({ start: At 0, end: At reg })
         |> List.map |x|
-            state |> get_register x
-    # TODO: this new_state should be under a flag
-    new_state = state |> set_index (state.cpu.i + Num.to_u16(reg + 1))
-    new_ram = new_state.memory.ram |> Ram.write_ram to_write new_state.cpu.i
-    { new_state & memory: { mem & ram: new_ram } }
+            cpu |> get_register x
+    # TODO: this new_cpu should be under a flag
+    new_cpu = cpu |> set_index (cpu.i + Num.to_u16(reg + 1))
+    new_ram = ram |> Ram.write_ram to_write new_cpu.i
+    (new_cpu, new_ram)
 
-memory_read = |state, reg|
-    # TODO: this new_state should be under a flag
-    new_state = state |> set_index (state.cpu.i + Num.to_u16(reg + 1))
+memory_read : (Cpu, Ram), U8 -> Cpu
+memory_read = |(cpu, ram), reg|
+    # TODO: this new_cpu should be under a flag
+    new_cpu = cpu |> set_index (cpu.i + 1 + Num.to_u16(reg))
     List.range({ start: At 0u8, end: At reg })
     |> List.walk
-        new_state
+        new_cpu
         |acc, x|
-            byte = acc.memory.ram |> Ram.read_ram (Num.to_u16(x) + acc.cpu.i)
+            byte = ram |> read_ram (Num.to_u16(x) + acc.i)
             acc |> set_register Num.to_u8(x) byte
 
-draw = |state, regx, regy, n|
-    valx = state |> get_register regx
-    valy = state |> get_register regy
-    x0 = Num.bitwise_and valx (Screen.screen_width - 1)
-    y0 = Num.bitwise_and valy (Screen.screen_height - 1)
+draw : (Cpu, Screen, Ram), U8, U8, U8 -> (Cpu, Screen)
+draw = |(cpu, screen, ram), regx, regy, n|
+    valx = cpu |> get_register regx
+    valy = cpu |> get_register regy
+    x0 = Num.bitwise_and valx (screen_width - 1)
+    y0 = Num.bitwise_and valy (screen_height - 1)
     sprite_bytes =
         List.range({ start: At 0u8, end: Before n })
-        |> List.map |mem_index|
-            state.memory.ram |> Ram.read_ram (state.cpu.i + Num.to_u16 mem_index)
+        |> List.map |ram_index|
+            ram |> read_ram (cpu.i + Num.to_u16 ram_index)
     (new_screen, new_collided) =
         sprite_bytes
-        |> List.walk_with_index (state.screen, Bool.false) |acc, byte, row_index|
+        |> List.walk_with_index (screen, Bool.false) |acc, byte, row_index|
             List.range({ start: At 0, end: Before 8 })
             |> List.walk acc |(scr, col), bit_index|
                 shift = 7u8 - Num.to_u8 bit_index
@@ -245,22 +256,52 @@ draw = |state, regx, regy, n|
                     |> Num.shift_right_by shift
                     |> Num.bitwise_and 1u8
                     |> (|b| b == 1u8)
-                x = (x0 + Num.to_u8 bit_index) % Screen.screen_width
-                y = (y0 + Num.to_u8 row_index) % Screen.screen_height
-                pixel = Screen.screen_get(scr, x, y)
+                x = (x0 + Num.to_u8 bit_index) % screen_width
+                y = (y0 + Num.to_u8 row_index) % screen_height
+                pixel = scr |> screen_get x y
                 if bit then
-                    (Screen.screen_set(scr, x, y, Bool.not pixel), col or pixel)
+                    (screen_set(scr, x, y, Bool.not pixel), col or pixel)
                 else
                     (scr, col)
-    new_state = state |> set_register 0xF Num.from_bool(new_collided)
-    { new_state & screen: new_screen }
+    new_cpu = cpu |> set_register 0xF Num.from_bool(new_collided)
+    (new_cpu, new_screen)
 
-screen_clear = |state|
-    new_screen = Screen.screen_clear state.screen
-    { state & screen: new_screen }
+Emulator : {
+    cpu : Cpu,
+    ram : Ram,
+    stack : Stack,
+    screen : Screen,
+    keypad : Keypad,
+    timers : Timers,
+}
 
-exec_instruction : State, U16 -> State
-exec_instruction = |state, bytes|
+with_cpu : Cpu -> (Emulator -> Emulator)
+with_cpu = |cpu|
+    |emu| { emu & cpu }
+
+with_stack : Stack -> (Emulator -> Emulator)
+with_stack = |stack|
+    |emu| { emu & stack }
+
+with_screen : Screen -> (Emulator -> Emulator)
+with_screen = |screen|
+    |emu| { emu & screen }
+
+with_ram : Ram -> (Emulator -> Emulator)
+with_ram = |ram|
+    |emu| { emu & ram }
+
+with_timers : Timers -> (Emulator -> Emulator)
+with_timers = |timers|
+    |emu| { emu & timers }
+
+compose : (Emulator -> Emulator), (Emulator -> Emulator) -> (Emulator -> Emulator)
+compose = |f, g| |x| g (f x)
+
+decode : Emulator, U16 -> (Emulator -> Emulator)
+decode = |emu, bytes|
+    { cpu, ram, stack, screen, keypad, timers } = emu
+
     n1 = bytes |> Num.shift_right_by 12 |> Num.to_u8 |> Num.bitwise_and 0x0Fu8
     n2 = bytes |> Num.shift_right_by 8 |> Num.to_u8 |> Num.bitwise_and 0x0Fu8
     n3 = bytes |> Num.shift_right_by 4 |> Num.to_u8 |> Num.bitwise_and 0x0Fu8
@@ -270,39 +311,56 @@ exec_instruction = |state, bytes|
     nnn = Num.bitwise_and 0x0FFF bytes
 
     when (n1, n2, n3, n4) is
-        (0x0, 0x0, 0xE, 0x0) -> screen_clear state
-        (0x0, _, _, 0xE) -> ret state
-        (0x1, _, _, _) -> jump state nnn
-        (0x2, _, _, _) -> sub_routine state nnn
-        (0x3, _, _, _) -> skip_if_reg state n2 nn
-        (0x4, _, _, _) -> skip_if_not_reg state n2 nn
-        (0x5, _, _, _) -> skip_if_regs state n2 n3
-        (0x6, _, _, _) -> set_nn state n2 nn
-        (0x7, _, _, _) -> add_nn state n2 nn
-        (0x8, _, _, 0x0) -> set_regs state n2 n3
-        (0x8, _, _, 0x1) -> binary_regs state n2 n3 Num.bitwise_or
-        (0x8, _, _, 0x2) -> binary_regs state n2 n3 Num.bitwise_and
-        (0x8, _, _, 0x3) -> binary_regs state n2 n3 Num.bitwise_xor
-        (0x8, _, _, 0x4) -> add_regs state n2 n3
-        (0x8, _, _, 0x5) -> sub_regs state n2 n3
-        (0x8, _, _, 0x6) -> shift_right state n2 n3
-        (0x8, _, _, 0x7) -> sub_regs_i state n2 n3
-        (0x8, _, _, 0xE) -> shift_left state n2 n3
-        (0x9, _, _, _) -> skip_if_not_regs state n2 n3
-        (0xA, _, _, _) -> set_index state nnn
+        (0x0, 0x0, 0xE, 0x0) -> screen_clear screen |> with_screen
+        (0x0, _, _, 0xE) ->
+            (c, s) = ret (cpu, stack)
+            compose (with_cpu c) (with_stack s)
+
+        (0x1, _, _, _) -> jump cpu nnn |> with_cpu
+        (0x2, _, _, _) ->
+            (c, s) = sub_routine (cpu, stack) nnn
+            compose (with_cpu c) (with_stack s)
+
+        (0x3, _, _, _) -> skip_if_reg cpu n2 nn |> with_cpu
+        (0x4, _, _, _) -> skip_if_not_reg cpu n2 nn |> with_cpu
+        (0x5, _, _, _) -> skip_if_regs cpu n2 n3 |> with_cpu
+        (0x6, _, _, _) -> set_nn cpu n2 nn |> with_cpu
+        (0x7, _, _, _) -> add_nn cpu n2 nn |> with_cpu
+        (0x8, _, _, 0x0) -> set_regs cpu n2 n3 |> with_cpu
+        (0x8, _, _, 0x1) -> binary_regs cpu n2 n3 Num.bitwise_or |> with_cpu
+        (0x8, _, _, 0x2) -> binary_regs cpu n2 n3 Num.bitwise_and |> with_cpu
+        (0x8, _, _, 0x3) -> binary_regs cpu n2 n3 Num.bitwise_xor |> with_cpu
+        (0x8, _, _, 0x4) -> add_regs cpu n2 n3 |> with_cpu
+        (0x8, _, _, 0x5) -> sub_regs cpu n2 n3 |> with_cpu
+        (0x8, _, _, 0x6) -> shift_right cpu n2 n3 |> with_cpu
+        (0x8, _, _, 0x7) -> sub_regs_i cpu n2 n3 |> with_cpu
+        (0x8, _, _, 0xE) -> shift_left cpu n2 n3 |> with_cpu
+        (0x9, _, _, _) -> skip_if_not_regs cpu n2 n3 |> with_cpu
+        (0xA, _, _, _) -> set_index cpu nnn |> with_cpu
         # TODO: config for using jump_offset_v0 instead
-        (0xB, _, _, _) -> jump_offset_v0 state nnn
-        (0xC, _, _, _) -> random state n2 nn
-        (0xD, _, _, _) -> draw state n2 n3 n4
-        (0xE, _, 0x9, 0xE) -> skip_if_key state n2
-        (0xE, _, 0xA, 0x1) -> skip_if_not_key state n2
-        (0xF, _, 0x0, 0x7) -> set_reg_d_timer state n2
-        (0xF, _, 0x0, 0xA) -> get_key state n2
-        (0xF, _, 0x1, 0x5) -> set_d_timer_reg state n2
-        (0xF, _, 0x1, 0x8) -> set_s_timer_reg state n2
-        (0xF, _, 0x1, 0xE) -> add_index state n2
-        (0xF, _, 0x2, 0x9) -> font_character state n2
-        (0xF, _, 0x3, 0x3) -> binary_decimal_conversion state n2
-        (0xF, _, 0x5, 0x5) -> memory_write state n2
-        (0xF, _, 0x6, 0x5) -> memory_read state n2
-        _ -> noop state
+        (0xB, _, _, _) -> jump_offset_v0 cpu nnn |> with_cpu
+        (0xC, _, _, _) -> random cpu n2 nn |> with_cpu
+        (0xD, _, _, _) ->
+            (c, s) = draw (cpu, screen, ram) n2 n3 n4
+            compose (with_cpu c) (with_screen s)
+
+        (0xE, _, 0x9, 0xE) -> skip_if_key (cpu, keypad) n2 |> with_cpu
+        (0xE, _, 0xA, 0x1) -> skip_if_not_key (cpu, keypad) n2 |> with_cpu
+        (0xF, _, 0x0, 0x7) -> set_reg_d_timer (cpu, timers) n2 |> with_cpu
+        (0xF, _, 0x0, 0xA) -> get_key (cpu, keypad) n2 |> with_cpu
+        (0xF, _, 0x1, 0x5) -> set_d_timer_reg (cpu, timers) n2 |> with_timers
+        (0xF, _, 0x1, 0x8) -> set_s_timer_reg (cpu, timers) n2 |> with_timers
+        (0xF, _, 0x1, 0xE) -> add_index cpu n2 |> with_cpu
+        (0xF, _, 0x2, 0x9) -> font_character cpu n2 |> with_cpu
+        (0xF, _, 0x3, 0x3) -> binary_decimal_conversion (cpu, ram) n2 |> with_ram
+        (0xF, _, 0x5, 0x5) ->
+            (c, r) = memory_write (cpu, ram) n2
+            compose (with_cpu c) (with_ram r)
+
+        (0xF, _, 0x6, 0x5) -> memory_read (cpu, ram) n2 |> with_cpu
+        _ -> |_| emu
+
+exec_instruction : Emulator, U16 -> Emulator
+exec_instruction = |emu, bytes|
+    transformation = decode emu bytes
+    transformation emu
