@@ -23,14 +23,10 @@ font = [
 ]
 
 empty_ram : Ram
-empty_ram =
-    List.repeat 0 0xFFF
-    |> List.map Num.to_u8
+empty_ram = List.repeat 0 0xFFF |> List.map Num.to_u8
 
 initial_ram : Ram
-initial_ram =
-    empty_ram
-    |> write_font
+initial_ram = empty_ram |> write_font
 
 write_ram : Ram, List U8, U16 -> Ram
 write_ram = |ram, stream, offset|
