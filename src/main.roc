@@ -5,6 +5,7 @@ app [main!] {
 
 import pf.Stdout
 import Emulator
+import Instructions exposing [exec]
 import Cartdrige
 import Timer
 import Screen
@@ -18,9 +19,7 @@ clear_screen! = |_|
     Stdout.line!(c)
 
 render! = |state|
-    new_state =
-        state
-        |> Emulator.exec_cpu
+    new_state = state |> exec
     _ = clear_screen!
     Screen.screen_draw! new_state.screen
     new_timers =

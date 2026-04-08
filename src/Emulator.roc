@@ -1,10 +1,10 @@
-module [Emulator, exec_cpu, initial_emulator]
+module [Emulator, initial_emulator]
 
-import Ram exposing [Ram, read_ram, initial_ram]
+import Ram exposing [Ram, initial_ram]
 import Stack exposing [Stack, initial_stack]
 import Keypad exposing [Keypad, initial_keypad]
 import Screen exposing [Screen, initial_screen]
-import Cpu exposing [Cpu, initial_cpu, advance_pc, exec_instruction]
+import Cpu exposing [Cpu, initial_cpu]
 import Timer exposing [Timers, initial_timers]
 
 Emulator : {
@@ -25,14 +25,3 @@ initial_emulator = {
     keypad: initial_keypad,
     timers: initial_timers,
 }
-
-exec_cpu : Emulator -> Emulator
-exec_cpu = |emu|
-    b1 = read_ram emu.ram (emu.cpu.pc) |> Num.to_u16
-    b2 = read_ram emu.ram (emu.cpu.pc + 1) |> Num.to_u16
-    bytes = Num.shift_left_by b1 8 |> Num.bitwise_or b2
-
-    cpu = emu.cpu |> advance_pc
-    { emu & cpu }
-    |> exec_instruction bytes
-
