@@ -13,11 +13,16 @@ Ram :: { data : List(U8) }.{
 
 	write : Ram, List(U8), U16 -> Ram
 	write = |ram, stream, offset| {
+    # TODO: I think we need index here and I think there is no currently
+    # supported way to do this
 		result = stream.fold(
 			(ram.data, 0),
 			|state, elem| {
 				(
-					state.0.set(offset.to_u64 + state.1, elem),
+          # TODO: .set does not exists, will they ever support this? 
+          # maybe I should take_first().concat([elem].concat(drop_first()))
+          # kinda shit
+					state.0.set(offset.to_u64() + state.1, elem),
 					state.1 + 1,
 				)
 			},
