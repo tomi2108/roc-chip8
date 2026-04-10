@@ -1,4 +1,8 @@
-Cpu :: { rs : List(U8), pc : U16, i : U16 }.{
+Cpu :: {
+	rs : List(U8),
+	pc : U16,
+	i : U16,
+}.{
 
 	new : Cpu
 	new = {
@@ -20,10 +24,14 @@ Cpu :: { rs : List(U8), pc : U16, i : U16 }.{
 	advance_if = |cpu, condition| if condition cpu.advance() else cpu
 
 	set_register : Cpu, U8, U8 -> Cpu
-	set_register = |cpu, reg, val|
-		cpu
-	# TODO:
-	# { ..cpu, rs: cpu.rs.set(reg.to_u64(), val) }
+	set_register = |cpu, reg, val| {
+		idx = reg.to_u64()
+
+		before = cpu.rs.take_first(idx)
+		after = cpu.rs.drop_first(idx + 1)
+
+		{ ..cpu, rs: before.concat([val].concat(after)) }
+	}
 
 	get_register : Cpu, U8 -> U8
 	get_register = |cpu, reg|

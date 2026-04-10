@@ -14,7 +14,10 @@ Keypad :: { data : List(Bool) }.{
 
 	some_key_pressed : Keypad -> Try(U8, [NoKeyPressed])
 	some_key_pressed = |keypad|
+    # TODO: I think we need index here... and I think there is
+    # no way to do this currently
 		keypad.data
-			.find_first(|x| x)
-			.map_both(|ok| ok.to_u8, |_| NoKeyPressed)
+			.keep_if(|x| x)
+      .first()
+			.map_both(|ok| ok.to_u8(), |_| NoKeyPressed)
 }

@@ -12,20 +12,19 @@ Ram :: { data : List(U8) }.{
 		}
 
 	write : Ram, List(U8), U16 -> Ram
-	write = |ram, stream, offset|
-	# TODO:         
-		ram
-	# result = stream.fold(
-	#         (ram.data, 0),
-	#         |state, elem| {
-	#             (
-	#                 state.0.set(offset.to_u64 + state.1, elem),
-	#                 state.1 + 1
-	#             )
-	#         }
-	#     )
-	#
-	# { ..ram, data: result.0 }
+	write = |ram, stream, offset| {
+		result = stream.fold(
+			(ram.data, 0),
+			|state, elem| {
+				(
+					state.0.set(offset.to_u64 + state.1, elem),
+					state.1 + 1,
+				)
+			},
+		)
+		{ ..ram, data: result.0 }
+	}
+
 }
 
 empty : Ram

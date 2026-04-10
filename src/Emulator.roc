@@ -18,7 +18,7 @@ Emulator :: {
 		cpu: Cpu.new,
 		ram: Ram.new,
 		stack: Stack.new,
-		screen: Screen.new,
+		screen: Screen.new(64,32),
 		keypad: Keypad.new,
 		timers: Timers.new,
 	}
