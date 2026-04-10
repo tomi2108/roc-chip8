@@ -1,11 +1,11 @@
 app [main!] {
-    pf: platform "https://github.com/roc-lang/basic-cli/releases/download/0.20.0/X73hGh05nNTkDHU06FHC0YfFaQB1pimX7gncRcao5mU.tar.br",
-    rand: "https://github.com/lukewilliamboswell/roc-random/releases/download/0.5.0/yDUoWipuyNeJ-euaij4w_ozQCWtxCsywj68H0PlJAdE.tar.br",
+	pf: platform "https://github.com/lukewilliamboswell/roc-platform-template-zig/releases/download/0.6/2BfGn4M9uWJNhDVeMghGeXNVDFijMfPsmmVeo6M4QjKX.tar.zst",
+	rand: "https://github.com/lukewilliamboswell/roc-random/releases/download/0.5.0/yDUoWipuyNeJ-euaij4w_ozQCWtxCsywj68H0PlJAdE.tar.br",
 }
 
 import pf.Stdout
 import Emulator
-import Instructions exposing [exec]
+import Instruction
 import Cartdrige
 import Timer
 import Screen
@@ -14,28 +14,27 @@ import pf.Sleep
 fps = 120
 
 clear_sequence = [27, 91, 50, 74, 27, 91, 72]
-clear_screen! = |_|
-    c = Str.from_utf8(clear_sequence)?
-    Stdout.line!(c)
+clear_screen! = |_| {
+	Stdout.line!(Str.from_utf8(clear_sequence)?)
+}
 
-render! = |state|
-    new_state = state |> exec
-    _ = clear_screen!
-    Screen.screen_draw! new_state.screen
-    new_timers =
-        new_state.timers
-        |> Timer.tick_timer Sound
-        |> Timer.tick_timer Delay
-    Sleep.millis! (1000 // fps)
-    render! { new_state & timers: new_timers }
+render! = |emu| {
+	new_emu = Instruction.exec(emu)
+	clear_screen!()
+	new_emu.screen.draw!()
+	new_timers = new_emu
+		.tick_timer(Sound)
+		.tick_timer(Delay)
 
-main! = |_args|
-    filename = "TETRIS"
+	Sleep.millis!(1000 // fps)
+	render!({ ..new_emu, timers: new_timers })
+}
 
-    emu = Emulator.initial_emulator
-    loaded =
-        emu.ram
-        |> Cartdrige.load_cartridge! filename
+main! = |_args| {
+	filename = "TETRIS"
 
-    render! { emu & ram: loaded }
+	emu = Emulator.new
+	loaded = Cartdrige.load_cartridge!(emu.ram, filename)
 
+	render!({ ..emu, ram: loaded })
+}

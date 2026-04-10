@@ -1,44 +1,47 @@
-module [Screen, screen_clear, screen_get, screen_set, screen_height, screen_width, initial_screen, screen_draw!]
-
 import pf.Stdout
 
-Screen : List (List Bool)
+Screen :: { data : List(List(Bool)) }.{
+	width = 64
+	height = 32
 
-screen_width = 64
-screen_height = 32
+	new : Screen
+	new = { data: List.repeat(List.repeat(False, width), height) }
 
-initial_screen = List.repeat (List.repeat Bool.false screen_width) screen_height
+	clear : Screen -> Screen
+	clear = |_screen| new
 
-screen_clear : Screen -> Screen
-screen_clear = |_screen| initial_screen
+	set : Screen, U8, U8, Bool -> Screen
+	set = |screen, x, y, to|
+		match screen.data.get(y.to_u64()) {
+			Ok(row) =>
+				screen.data.set(
+					y.to_u64(),
+					row.set(x.to_u64(), to),
+				)
+			Err(OutOfBounds) => {
+				crash "Illegal write to screen"
+			}
+		}
 
-screen_set : Screen, U8, U8, Bool -> Screen
-screen_set = |screen, x, y, to|
-    when List.get(screen, Num.to_u64 y) is
-        Err(OutOfBounds) -> crash "Illegal screen set"
-        Ok(row) ->
-            List.set(
-                screen,
-                Num.to_u64 y,
-                List.set(row, Num.to_u64 x, to),
-            )
+	get : Screen, U8, U8 -> Bool
+	get = |screen, x, y|
+		match Try.try(
+			screen.data.get(y.to_u64()),
+			|row| row.get(x.to_u64()),
+		) {
+			Ok(value) => value
+			Err(OutOfBounds) => {
+				crash "Illlegal read to screen"
+			}
+		}
 
-screen_get : Screen, U8, U8 -> Bool
-screen_get = |screen, x, y|
-    when
-        Result.try(
-            List.get(screen, Num.to_u64 y),
-            |row| List.get(row, Num.to_u64 x),
-        )
-    is
-        Ok(value) -> value
-        Err(OutOfBounds) -> crash "Illegal screen get"
+	draw! : Screen => {}
+	draw! = |screen|
+		for row in screen.data {
+			slice = row
+				.map(|col| if col "█" else "░")
+				.fold("", |a, b| a.concat(b))
 
-
-screen_draw! : Screen => {}
-screen_draw! = |screen|
-    List.walk! screen {} |acc, row|
-        slice = row |> List.map (|col| if col then "█" else "░") |> List.walk "" (|a, b| Str.concat a b)
-        when Stdout.line!(slice) is
-            Ok(_) -> acc
-            Err(_) -> crash "Cannot write to stdout"
+			Stdout.line!(slice)
+		}
+}
