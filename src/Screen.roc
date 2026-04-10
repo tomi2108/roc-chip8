@@ -1,11 +1,17 @@
 import pf.Stdout
 
-Screen :: { data : List(List(Bool)) }.{
-	width = 64
-	height = 32
+Screen :: {
+	data : List(List(Bool)),
+	width : U8,
+	height : U8,
+}.{
 
 	new : Screen
-	new = { data: List.repeat(List.repeat(False, width), height) }
+	new = {
+		data: 0.to(height).map(|_| 0.to(width).map(|_| False)),
+		width: 64,
+		height: 32,
+	}
 
 	clear : Screen -> Screen
 	clear = |_screen| new

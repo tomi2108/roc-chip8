@@ -235,104 +235,110 @@ memory_read = |(cpu, ram), reg| {
 		},
 	)
 }
-#
-# draw : (Cpu, Screen, Ram), U8, U8, U8 -> (Cpu, Screen)
-# draw = |(cpu, screen, ram), regx, regy, n|
-#     valx = cpu |> get_register regx
-#     valy = cpu |> get_register regy
-#     x0 = Num.bitwise_and valx (screen_width - 1)
-#     y0 = Num.bitwise_and valy (screen_height - 1)
-#     sprite_bytes =
-#         List.range({ start: At 0u8, end: Before n })
-#         |> List.map |ram_index|
-#             ram |> read_ram (cpu.i + Num.to_u16 ram_index)
-#     (new_screen, new_collided) =
-#         sprite_bytes
-#         |> List.walk_with_index (screen, Bool.false) |acc, byte, row_index|
-#             List.range({ start: At 0, end: Before 8 })
-#             |> List.walk acc |(scr, col), bit_index|
-#                 shift = 7u8 - Num.to_u8 bit_index
-#                 bit =
-#                     byte
-#                     |> Num.shift_right_by shift
-#                     |> Num.bitwise_and 1u8
-#                     |> (|b| b == 1u8)
-#                 x = (x0 + Num.to_u8 bit_index) % screen_width
-#                 y = (y0 + Num.to_u8 row_index) % screen_height
-#                 pixel = scr |> screen_get x y
-#                 if bit 
-#                     (screen_set(scr, x, y, Bool.not pixel), col or pixel)
-#                 else
-#                     (scr, col)
-#     new_cpu = cpu |> set_register 0xF Num.from_bool(new_collided)
-#     (new_cpu, new_screen)
-#
-# with_cpu = |cpu| |emu| { emu & cpu }
-# with_stack = |stack| |emu| { emu & stack }
-# with_screen = |screen| |emu| { emu & screen }
-# with_ram = |ram| |emu| { emu & ram }
-# with_timers = |timers| |emu| { emu & timers }
-# compose = |f, g| |x| g (f x)
-#
-# decode = |emu, bytes|
-#     { cpu, ram, stack, screen, keypad, timers } = emu
-#
-#     n1 = bytes |> Num.shift_right_by 12 |> Num.to_u8 |> Num.bitwise_and 0x0Fu8
-#     n2 = bytes |> Num.shift_right_by 8 |> Num.to_u8 |> Num.bitwise_and 0x0Fu8
-#     n3 = bytes |> Num.shift_right_by 4 |> Num.to_u8 |> Num.bitwise_and 0x0Fu8
-#     n4 = bytes |> Num.to_u8 |> Num.bitwise_and 0x0Fu8
-#
-#     nn = Num.bitwise_and 0x00FF bytes |> Num.to_u8
-#     nnn = Num.bitwise_and 0x0FFF bytes
-#
-#     match (n1, n2, n3, n4){
-#         (0x0, 0x0, 0xE, 0x0) => screen_clear screen |> with_screen
-#         (0x0, _, _, 0xE)=> 
-#             (c, s) = ret (cpu, stack)
-#             compose (with_cpu c) (with_stack s)
-#
-#         (0x1, _, _, _) => jump cpu nnn |> with_cpu
-#         (0x2, _, _, _)=> 
-#             (c, s) = sub_routine (cpu, stack) nnn
-#             compose (with_cpu c) (with_stack s)
-#
-#         (0x3, _, _, _) => skip_if_reg cpu n2 nn |> with_cpu
-#         (0x4, _, _, _) => skip_if_not_reg cpu n2 nn |> with_cpu
-#         (0x5, _, _, _) => skip_if_regs cpu n2 n3 |> with_cpu
-#         (0x6, _, _, _) => set_nn cpu n2 nn |> with_cpu
-#         (0x7, _, _, _) => add_nn cpu n2 nn |> with_cpu
-#         (0x8, _, _, 0x0) => set_regs cpu n2 n3 |> with_cpu
-#         (0x8, _, _, 0x1) => binary_regs cpu n2 n3 Num.bitwise_or |> with_cpu
-#         (0x8, _, _, 0x2) => binary_regs cpu n2 n3 Num.bitwise_and |> with_cpu
-#         (0x8, _, _, 0x3) => binary_regs cpu n2 n3 Num.bitwise_xor |> with_cpu
-#         (0x8, _, _, 0x4) => add_regs cpu n2 n3 |> with_cpu
-#         (0x8, _, _, 0x5) => sub_regs cpu n2 n3 |> with_cpu
-#         (0x8, _, _, 0x6) => shift_right cpu n2 n3 |> with_cpu
-#         (0x8, _, _, 0x7) => sub_regs_i cpu n2 n3 |> with_cpu
-#         (0x8, _, _, 0xE) => shift_left cpu n2 n3 |> with_cpu
-#         (0x9, _, _, _) => skip_if_not_regs cpu n2 n3 |> with_cpu
-#         (0xA, _, _, _) => set_index cpu nnn |> with_cpu
-#         # TODO: config for using jump_offset_v0 instead
-#         (0xB, _, _, _) => jump_offset_v0 cpu nnn |> with_cpu
-#         (0xC, _, _, _) => random cpu n2 nn |> with_cpu
-#         (0xD, _, _, _)=> 
-#             (c, s) = draw (cpu, screen, ram) n2 n3 n4
-#             compose (with_cpu c) (with_screen s)
-#
-#         (0xE, _, 0x9, 0xE) => skip_if_key (cpu, keypad) n2 |> with_cpu
-#         (0xE, _, 0xA, 0x1) => skip_if_not_key (cpu, keypad) n2 |> with_cpu
-#         (0xF, _, 0x0, 0x7) => set_reg_d_timer (cpu, timers) n2 |> with_cpu
-#         (0xF, _, 0x0, 0xA) => get_key (cpu, keypad) n2 |> with_cpu
-#         (0xF, _, 0x1, 0x5) => set_d_timer_reg (cpu, timers) n2 |> with_timers
-#         (0xF, _, 0x1, 0x8) => set_s_timer_reg (cpu, timers) n2 |> with_timers
-#         (0xF, _, 0x1, 0xE) => add_index cpu n2 |> with_cpu
-#         (0xF, _, 0x2, 0x9) => font_character cpu n2 |> with_cpu
-#         (0xF, _, 0x3, 0x3) => binary_decimal_conversion (cpu, ram) n2 |> with_ram
-#         (0xF, _, 0x5, 0x5)=> 
-#             (c, r) = memory_write (cpu, ram) n2
-#             compose (with_cpu c) (with_ram r)
-#
-#         (0xF, _, 0x6, 0x5) => memory_read (cpu, ram) n2 |> with_cpu
-#         _ => |_| emu
-#   }
-#
+
+draw : (Cpu, Screen, Ram), U8, U8, U8 -> (Cpu, Screen)
+draw = |(cpu, screen, ram), regx, regy, n| {
+	valx = cpu.get_register(regx)
+	valy = cpu.get_register(regy)
+	x0 = valx.bitwise_and(screen.width - 1)
+	y0 = valy.bitwise_and(screen.height - 1)
+	sprite_bytes = 
+		0.until(n)
+			.map(|ram_index| ram.read(cpu.i + ram_index.to_u16()))
+
+	(new_screen, new_collided) = 
+		sprite_bytes.walk_with_index(
+			(screen, Bool.False),
+			|acc, byte, row_index|
+				0.until(8)
+					.walk(
+						acc,
+						|(scr, col), bit_index| {
+							shift = 7 - bit_index.to_u8()
+							bit = (byte.shift_right_by(shift).bitwise_and(1)) == 1
+
+							x = (x0 + bit_index.to_u8()) % scr.width
+							y = (y0 + row_index.to_u8()) % scr.height
+							pixel = scr.get(x, y)
+							if bit (scr.set(x, y, !pixel), col or pixel)
+							else (scr, col)
+						},
+					),
+		)
+	new_cpu = cpu.set_register(0xF, U8.from_bool(new_collided))
+	(new_cpu, new_screen)
+}
+
+with_cpu = |cpu| |emu| { ..emu, cpu }
+with_stack = |stack| |emu| { ..emu, stack }
+with_screen = |screen| |emu| { ..emu, screen }
+with_ram = |ram| |emu| { ..emu, ram }
+with_timers = |timers| |emu| { ..emu, timers }
+compose = |f, g| |x| g(f(x))
+
+decode = |emu, bytes| {
+	{ cpu, ram, stack, screen, keypad, timers } = emu
+
+	n1 = bytes.shift_right_by(12).to_u8().bitwise_and(0x0F)
+	n2 = bytes.shift_right_by(8).to_u8().bitwise_and(0x0F)
+	n3 = bytes.shift_right_by(4).to_u8().bitwise_and(0x0F)
+	n4 = bytes.to_u8().bitwise_and(0x0F)
+
+	nn = bytes.to_u8().bitwise_and(0x00FF)
+	nnn = bytes.bitwise_and(0x0FFF)
+
+	match (n1, n2, n3, n4) {
+		(0x0, 0x0, 0xE, 0x0) => screen.clear()->with_screen()
+		(0x0, _, _, 0xE) => {
+			(c, s) = (cpu, stack)->ret()
+			compose(with_cpu(c), with_stack(s))
+		}
+
+		(0x1, _, _, _) => cpu.jump(nnn)->with_cpu()
+		(0x2, _, _, _) => {
+			(c, s) = (cpu, stack)->sub_routine(nnn)
+			compose(with_cpu(c), with_stack(s))
+		}
+
+		(0x3, _, _, _) => cpu->skip_if_reg(n2, nn)->with_cpu()
+		(0x4, _, _, _) => cpu->skip_if_not_reg(n2, nn)->with_cpu()
+		(0x5, _, _, _) => cpu->skip_if_regs(n2, n3)->with_cpu()
+		(0x6, _, _, _) => cpu->set_nn(n2, nn)->with_cpu()
+		(0x7, _, _, _) => cpu->add_nn(n2, nn)->with_cpu()
+		(0x8, _, _, 0x0) => cpu->set_regs(n2, n3)->with_cpu()
+		(0x8, _, _, 0x1) => cpu->binary_regs(n2, n3, U8.bitwise_or)->with_cpu()
+		(0x8, _, _, 0x2) => cpu->binary_regs(n2, n3, U8.bitwise_and)->with_cpu()
+		(0x8, _, _, 0x3) => cpu->binary_regs(n2, n3, U8.bitwise_xor)->with_cpu()
+		(0x8, _, _, 0x4) => cpu->add_regs(n2, n3)->with_cpu()
+		(0x8, _, _, 0x5) => cpu->sub_regs(n2, n3)->with_cpu()
+		(0x8, _, _, 0x6) => cpu->shift_right(n2, n3)->with_cpu()
+		(0x8, _, _, 0x7) => cpu->sub_regs_i(n2, n3)->with_cpu()
+		(0x8, _, _, 0xE) => cpu->shift_left(n2, n3)->with_cpu()
+		(0x9, _, _, _) => cpu->skip_if_not_regs(n2, n3)->with_cpu()
+		(0xA, _, _, _) => cpu.set_index(nnn)->with_cpu()
+		# TODO: config for using jump_offset_v0 instead
+		(0xB, _, _, _) => cpu->jump_offset_v0(nnn)->with_cpu()
+		(0xC, _, _, _) => cpu->random(n2, nn)->with_cpu()
+		(0xD, _, _, _) => {
+			(c, s) = (cpu, screen, ram)->draw(n2, n3, n4)
+			compose(with_cpu(c), with_screen(s))
+		}
+
+		(0xE, _, 0x9, 0xE) => (cpu, keypad)->skip_if_key(n2)->with_cpu()
+		(0xE, _, 0xA, 0x1) => (cpu, keypad)->skip_if_not_key(n2)->with_cpu()
+		(0xF, _, 0x0, 0x7) => (cpu, timers)->set_reg_d_timer(n2)->with_cpu()
+		(0xF, _, 0x0, 0xA) => (cpu, keypad)->get_key(n2)->with_cpu()
+		(0xF, _, 0x1, 0x5) => (cpu, timers)->set_d_timer_reg(n2)->with_timers()
+		(0xF, _, 0x1, 0x8) => (cpu, timers)->set_s_timer_reg(n2)->with_timers()
+		(0xF, _, 0x1, 0xE) => cpu->add_index(n2)->with_cpu()
+		(0xF, _, 0x2, 0x9) => cpu->font_character(n2)->with_cpu()
+		(0xF, _, 0x3, 0x3) => (cpu, ram)->binary_decimal_conversion(n2)->with_ram()
+		(0xF, _, 0x5, 0x5) => {
+			(c, r) = (cpu, ram)->memory_write(n2)
+			compose(with_cpu(c), with_ram(r))
+		}
+
+		(0xF, _, 0x6, 0x5) => (cpu, ram)->memory_read(n2)->with_cpu()
+		_ => |_| emu
+	}
+}
